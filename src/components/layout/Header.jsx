@@ -124,9 +124,9 @@ export function Header({
           <img src="/images/darklogo.svg" alt="" />
         </div>
         <div className="profile__brand-copy grid min-w-0 content-center justify-items-center gap-[5px]">
-          <span className="profile__welcome">Welcome to</span>
+          <span className="profile__welcome">Ethereum portfolio explorer</span>
           <h1><span>MyWallet</span><span className="brand-360">360</span></h1>
-          <span className="profile__tagline">Understands every txn.</span>
+          <span className="profile__tagline">Wallet intelligence, simplified.</span>
         </div>
       </div>
 
