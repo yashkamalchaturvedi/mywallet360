@@ -16,6 +16,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "redis": "^5.8.2",
+    "serverless-http": "^4.0.0",
     "web3": "^4.16.0"
   },
   "overrides": {
