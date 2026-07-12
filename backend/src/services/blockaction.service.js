@@ -9,9 +9,9 @@ import {
   round,
   tokenAmount,
 } from "../utils/calculations.js";
+import { getCacheValue, setCacheValue } from "./cache.service.js";
 
 const BLOCKACTION_URL = process.env.BLOCKACTION_API_URL;
-const CHAIN_ID = process.env.BLOCKACTION_CHAIN_ID || "1";
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 10;
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -54,8 +54,6 @@ const PROTOCOL_ADDRESSES = {
   ]),
 };
 
-const responseCache = new Map();
-const walletCache = new Map();
 let requestQueue = Promise.resolve();
 let lastRequestAt = 0;
 
@@ -75,20 +73,47 @@ function scheduleRequest(task) {
   return scheduled;
 }
 
-function getCached(key) {
-  const cached = responseCache.get(key);
+export function wallet360RequestConfig(params) {
+  const baseUrl = BLOCKACTION_URL?.replace(/\/$/, "");
+  const headers = { Accept: "application/json" };
+  const query = {};
+  let path;
 
-  if (!cached || cached.expiresAt < Date.now()) {
-    responseCache.delete(key);
-    return null;
+  if (params.module === "account" && params.action === "balance") {
+    path = `/api/wallet/${params.address}/balance`;
+  } else if (params.module === "account" && params.action === "txlist") {
+    path = `/api/wallet/${params.address}/normal-txs`;
+  } else if (params.module === "account" && params.action === "txlistinternal") {
+    path = `/api/wallet/${params.address}/internal-txs`;
+  } else if (params.module === "account" && params.action === "tokentx") {
+    path = `/api/wallet/${params.address}/erc20-txs`;
+  } else if (params.module === "account" && params.action === "tokennfttx") {
+    path = `/api/wallet/${params.address}/nft-txs`;
+  } else if (params.module === "stats" && params.action === "ethprice") {
+    path = "/api/eth-price";
+  } else if (params.module === "block" && params.action === "getblocknobytime") {
+    path = "/api/block-by-timestamp";
+  } else {
+    throw new Error(`Unsupported Wallet360 request: ${params.module}.${params.action}`);
   }
 
-  return cached.value;
-}
+  if (params.module === "account" && params.action !== "balance") {
+    for (const name of ["page", "offset", "sort", "startblock", "endblock"]) {
+      if (params[name] !== undefined) query[name] = params[name];
+    }
+  }
+  if (params.module === "block") {
+    query.timestamp = params.timestamp;
+    query.closest = params.closest;
+  }
+  if (params.module === "account") {
+    if (!process.env.BLOCKACTION_API_KEY) {
+      throw new Error("BLOCKACTION_API_KEY is not configured");
+    }
+    headers["X-API-Key"] = process.env.BLOCKACTION_API_KEY;
+  }
 
-function setCached(key, value) {
-  responseCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-  return value;
+  return { targetUrl: `${baseUrl}${path}`, headers, query };
 }
 
 export async function blockActionRequest(params) {
@@ -96,24 +121,19 @@ export async function blockActionRequest(params) {
     throw new Error("BLOCKACTION_API_URL is not configured");
   }
 
-  const requestParams = {
-    chainid: CHAIN_ID,
-    ...params,
-  };
-  if (process.env.BLOCKACTION_API_KEY) {
-    requestParams.apikey = process.env.BLOCKACTION_API_KEY;
-  }
-  const cacheKey = new URLSearchParams(requestParams).toString();
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const { targetUrl, headers, query } = wallet360RequestConfig(params);
+  const cacheKey = `wallet360:raw:${targetUrl}?${new URLSearchParams(query).toString()}`;
+  const cached = await getCacheValue(cacheKey);
+  if (cached !== null) return cached;
 
   return scheduleRequest(async () => {
     let lastError;
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const response = await axios.get(BLOCKACTION_URL, {
-          params: requestParams,
+        const response = await axios.get(targetUrl, {
+          params: query,
+          headers,
           timeout: 15_000,
         });
 
@@ -121,7 +141,7 @@ export async function blockActionRequest(params) {
           const errorMessage = `${response.data.message} ${response.data.result}`.toLowerCase();
 
           if (errorMessage.includes("no transactions")) {
-            return setCached(cacheKey, []);
+            return setCacheValue(cacheKey, [], CACHE_TTL_MS);
           }
 
           if (errorMessage.includes("rate limit") && attempt < 2) {
@@ -132,9 +152,17 @@ export async function blockActionRequest(params) {
           throw new Error(response.data.result || response.data.message || "BlockAction request failed");
         }
 
-        return setCached(cacheKey, response.data?.result ?? response.data?.data ?? response.data);
+        return setCacheValue(
+          cacheKey,
+          response.data?.result ?? response.data?.data ?? response.data,
+          CACHE_TTL_MS,
+        );
       } catch (error) {
         lastError = error;
+
+        if (params.action === "txlistinternal" && error.response?.status === 404) {
+          return setCacheValue(cacheKey, [], CACHE_TTL_MS);
+        }
 
         if (attempt < 2 && ["ECONNRESET", "ETIMEDOUT", "ECONNABORTED"].includes(error.code)) {
           await wait(750 * (attempt + 1));
@@ -687,10 +715,8 @@ export async function getWalletData(walletAddress, analysisPeriod = DEFAULT_ANAL
   } else {
     const normalizedPeriod = normalizeAnalysisPeriod(analysisPeriod);
     cacheKey = `${address}:${normalizedPeriod}`;
-    const cachedWallet = walletCache.get(cacheKey);
-    if (cachedWallet?.expiresAt > Date.now()) {
-      return cachedWallet.value;
-    }
+    const cachedWallet = await getCacheValue(`wallet360:analysis:${cacheKey}`);
+    if (cachedWallet !== null) return cachedWallet;
     period = await getAnalysisPeriod(normalizedPeriod);
   }
 
@@ -804,10 +830,7 @@ export async function getWalletData(walletAddress, analysisPeriod = DEFAULT_ANAL
     const result = buildPublicWalletData(analytics);
 
     if (cacheKey) {
-      walletCache.set(cacheKey, {
-        value: result,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
+      await setCacheValue(`wallet360:analysis:${cacheKey}`, result, CACHE_TTL_MS);
     }
 
     return result;

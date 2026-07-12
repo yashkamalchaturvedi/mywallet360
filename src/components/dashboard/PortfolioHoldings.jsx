@@ -17,8 +17,6 @@ const formatCompact = (v) => {
   return `$${v.toFixed(2)}`
 }
 
-const parseUsd = (str) => parseFloat(String(str).replace(/[^0-9.-]/g, '')) || 0
-
 function TokenIcon({ symbol, size }) {
   const initial = (symbol || '?').charAt(0)
   const colorIndex = symbol ? symbol.charCodeAt(0) % TOKEN_COLORS.length : 0
@@ -125,7 +123,7 @@ function renderActiveShape(props) {
   )
 }
 
-export function PortfolioHoldings({ holdings, totalValue, valuationHistory, periodLabel, isLoading, displayMode, ethPrice }) {
+export function PortfolioHoldings({ holdings, valuationHistory, periodLabel, isLoading, displayMode, ethPrice }) {
   const [hoveredSymbol, setHoveredSymbol] = useState(null)
   const [hoveredLegend, setHoveredLegend] = useState(null)
   const [showAllTokens, setShowAllTokens] = useState(false)
