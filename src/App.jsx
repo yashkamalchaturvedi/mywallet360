@@ -91,6 +91,7 @@ export default function App() {
               </a>
             </div>
           </section>
+          <BottomNav active={activeTab} onChange={setActiveTab} />
           {activeTab === 'Overview' ? (
             <main className={`grid gap-9 max-[700px]:gap-6 ${isLoading ? 'dashboard-loading' : 'dashboard-ready'}`} key={wallet.id}>
               {isLoading && <DashboardLoader />}
@@ -139,7 +140,6 @@ export default function App() {
               <MoneyFlowTab wallet={wallet} />
             </main>
           )}
-          <BottomNav active={activeTab} onChange={setActiveTab} />
         </>
       ) : (
         <main className="wallet-empty-state grid min-h-[58vh] place-content-center justify-items-center gap-3 rounded-[28px] border border-dashed border-[rgba(44,122,123,.2)] bg-white/55 px-6 py-12 text-center dark:border-[var(--border)] dark:bg-[rgba(17,24,39,.55)]">
