@@ -1,6 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildPublicWalletData, buildValuationHistory } from "./blockaction.service.js";
+import {
+  buildPublicWalletData,
+  buildValuationHistory,
+  wallet360RequestConfig,
+} from "./blockaction.service.js";
+
+test("maps account requests to authenticated Wallet360 REST endpoints", () => {
+  const previousKey = process.env.BLOCKACTION_API_KEY;
+  process.env.BLOCKACTION_API_KEY = "test-key";
+  const config = wallet360RequestConfig({
+    module: "account",
+    action: "tokentx",
+    address: "0xabc",
+    page: 2,
+    offset: 1000,
+    sort: "desc",
+    startblock: 10,
+    endblock: 20,
+  });
+  if (previousKey === undefined) delete process.env.BLOCKACTION_API_KEY;
+  else process.env.BLOCKACTION_API_KEY = previousKey;
+
+  assert.equal(config.targetUrl.endsWith("/api/wallet/0xabc/erc20-txs"), true);
+  assert.equal(config.headers["X-API-Key"], "test-key");
+  assert.deepEqual(config.query, {
+    page: 2,
+    offset: 1000,
+    sort: "desc",
+    startblock: 10,
+    endblock: 20,
+  });
+});
+
+test("maps public Wallet360 endpoints without API credentials", () => {
+  const config = wallet360RequestConfig({
+    module: "block",
+    action: "getblocknobytime",
+    timestamp: 123,
+    closest: "after",
+  });
+  assert.equal(config.targetUrl.endsWith("/api/block-by-timestamp"), true);
+  assert.equal("X-API-Key" in config.headers, false);
+  assert.deepEqual(config.query, { timestamp: 123, closest: "after" });
+});
 
 test("builds dated current-price value estimates from wallet flows", () => {
   const history = buildValuationHistory({
