@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CircleCheck, ExternalLink, Network } from 'lucide-react'
 import { Activity } from './components/dashboard/Activity'
 import { BalanceCard } from './components/dashboard/BalanceCard'
 import { DashboardBar } from './components/dashboard/DashboardBar'
@@ -74,6 +75,22 @@ export default function App() {
 
       {wallet ? (
         <>
+          <section className="wallet-context" aria-label="Wallet overview heading">
+            <div className="wallet-context__title">
+              <span className="wallet-context__icon"><Network aria-hidden="true" /></span>
+              <div>
+                <span>Ethereum Mainnet</span>
+                <h2>Address Overview</h2>
+              </div>
+            </div>
+            <div className="wallet-context__address">
+              <CircleCheck aria-hidden="true" />
+              <code>{wallet.id}</code>
+              <a href={`https://etherscan.io/address/${wallet.id}`} target="_blank" rel="noreferrer" aria-label="View address on Etherscan">
+                <ExternalLink aria-hidden="true" />
+              </a>
+            </div>
+          </section>
           {activeTab === 'Overview' ? (
             <main className={`grid gap-9 max-[700px]:gap-6 ${isLoading ? 'dashboard-loading' : 'dashboard-ready'}`} key={wallet.id}>
               {isLoading && <DashboardLoader />}
